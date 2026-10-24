@@ -3,6 +3,8 @@ name = "control-mouse-mac-mcp"
 version = "0.1.0"
 description = "MCP server that lets AI control a Mac via screenshots, mouse, and keyboard"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=2.3,<3",

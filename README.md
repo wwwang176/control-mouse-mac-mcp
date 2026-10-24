@@ -147,3 +147,7 @@ E2E=1 .venv/bin/python -m pytest tests/e2e -v
 - 只支援 macOS。Windows 請用 [control-mouse-mcp](https://github.com/wwwang176/control-mouse-mcp)。
 - 系統開啟「自然捲動」時，server 會自動反轉滾輪方向，`up` 一律代表往上捲。
 - Retina 與多螢幕的座標換算已依 point／pixel 分開處理，但目前只在單一非 Retina 螢幕上實測過。
+
+## 授權
+
+[MIT](LICENSE)
