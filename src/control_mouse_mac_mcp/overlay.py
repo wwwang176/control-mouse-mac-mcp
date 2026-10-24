@@ -1,16 +1,22 @@
 """Visual feedback: action text at the bottom of the screen and a ring around the cursor.
 
-Both are borderless, click-through windows with sharingType = none, so they
-never appear in screenshots. Public methods are thread-safe: they only
-schedule work on the main thread.
+Both are borderless, click-through windows. They stay capturable so people
+watching through screen sharing or remote desktop (which capture the screen)
+can see them; the server's own screenshots hide them via hidden_for_capture().
+Public methods are thread-safe: they only schedule work on the main thread.
 """
+
+import time
+from contextlib import contextmanager
 
 import AppKit
 import objc
 import Quartz
 from PyObjCTools import AppHelper
 
-from .mainthread import call_on_main
+from .mainthread import call_on_main, run_on_main
+
+CAPTURE_SETTLE = 0.05  # seconds for the window server to apply the hide before capturing
 
 
 def _color(hex_rgb: str, alpha: float = 1.0):
@@ -37,7 +43,6 @@ def _overlay_window(rect):
         | AppKit.NSWindowCollectionBehaviorFullScreenAuxiliary
         | AppKit.NSWindowCollectionBehaviorIgnoresCycle
     )
-    win.setSharingType_(AppKit.NSWindowSharingNone)  # excluded from screenshots
     win.setReleasedWhenClosed_(False)
     return win
 
@@ -52,6 +57,7 @@ class KeyOverlay:
     def __init__(self):
         self._generation = 0
         self._win = _overlay_window(AppKit.NSMakeRect(0, 0, 100, 40))
+        self.alpha = 1.0
         content = self._win.contentView()
         content.setWantsLayer_(True)
         content.layer().setBackgroundColor_(_color("#1a1a2e", 0.85).CGColor())
@@ -84,6 +90,9 @@ class KeyOverlay:
     def _hide_if(self, gen: int) -> None:
         if gen == self._generation:
             self._win.orderOut_(None)
+
+    def set_suppressed(self, suppressed: bool) -> None:
+        self._win.setAlphaValue_(0.0 if suppressed else self.alpha)
 
 
 class RingView(AppKit.NSView):
@@ -120,7 +129,8 @@ class CursorHighlight:
         self._generation = 0
         s = self.RING_SIZE
         self._win = _overlay_window(AppKit.NSMakeRect(0, 0, s, s))
-        self._win.setAlphaValue_(0.6)
+        self.alpha = 0.6
+        self._win.setAlphaValue_(self.alpha)
         self._view = RingView.alloc().initWithFrame_(AppKit.NSMakeRect(0, 0, s, s))
         self._win.setContentView_(self._view)
 
@@ -156,6 +166,9 @@ class CursorHighlight:
         if gen == self._generation:
             self._win.orderOut_(None)
 
+    def set_suppressed(self, suppressed: bool) -> None:
+        self._win.setAlphaValue_(0.0 if suppressed else self.alpha)
+
 
 class _NoOverlay:
     """Stand-in used before the overlays are created (e.g. when imported without an event loop)."""
@@ -175,3 +188,27 @@ def install() -> None:
     global key_overlay, cursor_highlight
     key_overlay = KeyOverlay()
     cursor_highlight = CursorHighlight()
+
+
+_suppress_count = 0  # captures in progress; only touched on the main thread
+
+
+def _suppress(delta: int) -> None:
+    global _suppress_count
+    _suppress_count += delta
+    for o in (key_overlay, cursor_highlight):
+        o.set_suppressed(_suppress_count > 0)
+
+
+@contextmanager
+def hidden_for_capture():
+    """Make the overlays invisible while the server takes a screenshot."""
+    if isinstance(key_overlay, _NoOverlay):
+        yield
+        return
+    run_on_main(lambda: _suppress(1))
+    time.sleep(CAPTURE_SETTLE)
+    try:
+        yield
+    finally:
+        call_on_main(_suppress, -1)

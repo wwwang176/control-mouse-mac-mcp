@@ -5,7 +5,7 @@
 ## 目標
 
 - 14 個工具與 Windows 版同名同參數，只加 Mac 必要的差異。
-- 提示視窗（底部動作文字、游標光圈）不會被截進截圖。
+- 提示視窗（底部動作文字、游標光圈）不會出現在 server 的截圖裡，但透過遠端桌面看得到。
 - 公開發佈，支援 `uvx` 一行安裝；MCP 名稱為 `computer-mac-control`。
 - 缺權限時回傳清楚的錯誤訊息：缺哪個權限、要開給哪個 App、開完要重啟。
 
@@ -22,7 +22,7 @@
 ## 技術選擇
 
 - Python ≥ 3.10、PyObjC（Quartz、Cocoa、ApplicationServices）、Pillow、`mcp` 2.x（`MCPServer`）。
-- 截圖使用系統內建的 `screencapture` 指令：Apple 持續維護、遵守 `sharingType`，約 100ms。不用已被標記停用的 `CGWindowListCreateImage`。
+- 截圖使用系統內建的 `screencapture` 指令：Apple 持續維護，約 100ms。不用已被標記停用的 `CGWindowListCreateImage`。
 
 ## 架構
 
@@ -76,7 +76,9 @@ src/control_mouse_mac_mcp/
 
 ## 提示視窗
 
-- 兩個無邊框 `NSWindow`：`ignoresMouseEvents`、`sharingType = none`、狀態列層級、出現在所有桌面空間。
+- 兩個無邊框 `NSWindow`：`ignoresMouseEvents`、狀態列層級、出現在所有桌面空間。
+- **不使用 `sharingType = none`**：它會讓視窗從所有截取來源消失，包括遠端桌面與螢幕共享，透過 AnyDesk 等工具看 Mac 的使用者會完全看不到提示視窗。
+  改為 server 截圖時（`screen.capture`）先把提示視窗透明度設為 0、等 50ms 讓 window server 套用，截完再恢復。以計數器處理同時進行的截圖（例如 `wait_for_change` 與其他工具並行）。代價是截圖瞬間提示視窗會閃一下。
 - 動作文字：主螢幕底部中央、距底部 120pt，深色半透明圓角背景、綠色粗體等寬字，1.5 秒後隱藏。
 - 游標光圈：直徑 200pt 的圓環，移動時金色、點擊時紅色加粗；點擊 400ms 後恢復，閒置 800ms 後隱藏。
 

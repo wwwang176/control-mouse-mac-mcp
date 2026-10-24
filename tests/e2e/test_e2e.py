@@ -13,9 +13,14 @@ import sys
 import time
 from pathlib import Path
 
+import base64
+import tempfile
+from io import BytesIO
+
 import anyio
 import pytest
 from mcp import ClientSession
+from PIL import Image
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 pytestmark = pytest.mark.skipif(not os.environ.get("E2E"), reason="set E2E=1 to run (moves the mouse and types)")
@@ -55,6 +60,24 @@ def data(result):
     return parsed[0] if len(parsed) == 1 else parsed
 
 
+def overlay_green_ratio(img: Image.Image) -> float:
+    """Fraction of pixels in the overlay text color (#00FF88)."""
+    raw = img.convert("RGB").tobytes()
+    px = zip(raw[0::3], raw[1::3], raw[2::3])
+    return sum(1 for r, g, b in px if r < 90 and g > 200 and 100 < b < 190) / (len(raw) // 3)
+
+
+def capture_like_remote_desktop(left: int, top: int, right: int, bottom: int) -> Image.Image:
+    """Capture from outside the server, the way screen sharing / remote desktop apps see the screen."""
+    fd, path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    subprocess.run(["screencapture", "-x", "-R", f"{left},{top},{right - left},{bottom - top}", path], check=True)
+    img = Image.open(path)
+    img.load()
+    os.unlink(path)
+    return img
+
+
 def find_target(windows: list[dict]) -> dict | None:
     return next((w for w in windows if w["title"] == TARGET), None)
 
@@ -78,6 +101,16 @@ async def scenario():
 
         shot = await call("screenshot")
         assert len(images(shot)) == 1 and "scale_x=" in texts(shot)[0]
+
+        # overlay: visible to other capturers (remote desktop), but not in the server's own screenshots
+        w, h = info["primary_width"], info["primary_height"]
+        bottom_center = dict(left=w // 2 - 250, top=h - 190, right=w // 2 + 250, bottom=h - 100)
+        await call("press_key", keys="shift")
+        await anyio.sleep(0.3)
+        assert overlay_green_ratio(capture_like_remote_desktop(**bottom_center)) > 0.01, "overlay not visible on screen"
+        own = await call("screenshot", **bottom_center)
+        own_img = Image.open(BytesIO(base64.b64decode(images(own)[0].data)))
+        assert overlay_green_ratio(own_img) == 0, "overlay leaked into the server's screenshot"
 
         # window management
         await call("manage_window", title=TARGET, action="move", x=300, y=200, width=600, height=250)

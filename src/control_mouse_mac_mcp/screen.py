@@ -1,7 +1,7 @@
 """Screenshots, display info, and change detection.
 
-Screenshots use the built-in `screencapture` tool, which respects
-NSWindow.sharingType, so the overlays never show up in captures.
+Screenshots use the built-in `screencapture` tool. The overlays are hidden
+while capturing, so they never show up in the server's screenshots.
 Regions are in points; captured images are in pixels (2x on Retina).
 """
 
@@ -15,6 +15,7 @@ import AppKit
 import Quartz
 from PIL import Image, ImageChops
 
+from . import overlay
 from .geometry import Rect, display_containing, flip_y, region_around, scale_factors, union
 from .mainthread import run_on_main
 
@@ -102,7 +103,8 @@ def capture(region: Rect) -> Image.Image:
     os.close(fd)
     try:
         rect = f"{int(region.x)},{int(region.y)},{int(region.width)},{int(region.height)}"
-        r = subprocess.run(["screencapture", "-x", "-t", "png", "-R", rect, path], capture_output=True)
+        with overlay.hidden_for_capture():
+            r = subprocess.run(["screencapture", "-x", "-t", "png", "-R", rect, path], capture_output=True)
         if r.returncode != 0 or os.path.getsize(path) == 0:
             raise RuntimeError(f"screencapture failed: {r.stderr.decode().strip() or r.returncode}")
         img = Image.open(path)
