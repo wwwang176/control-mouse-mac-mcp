@@ -1,0 +1,33 @@
+[project]
+name = "control-mouse-mac-mcp"
+version = "0.1.0"
+description = "MCP server that lets AI control a Mac via screenshots, mouse, and keyboard"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=2.3,<3",
+    "pillow>=10",
+    "pyobjc-framework-Quartz>=10",
+    "pyobjc-framework-Cocoa>=10",
+    "pyobjc-framework-ApplicationServices>=10",
+]
+classifiers = [
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+control-mouse-mac-mcp = "control_mouse_mac_mcp.__main__:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/control_mouse_mac_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

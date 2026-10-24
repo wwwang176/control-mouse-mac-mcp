@@ -1,0 +1,14 @@
+# 驗證腳本（不進版控）
+spike/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# macOS
+.DS_Store
